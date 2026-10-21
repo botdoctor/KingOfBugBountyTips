@@ -2645,6 +2645,37 @@ curl -s https://target.com/favicon.ico | python3 -c "import mmh3,sys,codecs;prin
 
 ---
 
+### ⚡ PHP "php2shell" - CVE-2026-109618 / CVE-2026-109619 Mass Recon
+
+> **Pre-auth RCE (CVSS 9.8) in PHP core — CVE-2026-109618 (memory corruption via OOM longjmp) and CVE-2026-109619 (use-after-free from stale global state). Affects PHP 8.2 < 8.2.35, 8.3 < 8.3.36, 8.4 < 8.4.27, 8.5 < 8.5.12 (PHP-FPM, Apache mod_php, php-cgi, FrankenPHP, LiteSpeed). Mass-detect vulnerable PHP versions before attackers do.**
+
+#### 1. Grab live hosts and fingerprint the PHP version from the X-Powered-By header (php2shell / CVE-2026-109618)
+```bash
+cat hosts.txt | httpx -silent -include-response-header -json | jq -r 'select(.header["x_powered_by"]!=null) | [.url,.header["x_powered_by"]] | @tsv' | grep -i "php/" | anew php2shell-powered-by.txt
+```
+
+#### 2. Subdomains to live hosts exposing PHP in one pass (php2shell / CVE-2026-109619)
+```bash
+subfinder -d $1 -all -silent | dnsx -silent | httpx -silent -include-response-header -json | jq -r 'select((.header["x_powered_by"]//"")|test("PHP";"i")) | [.url,(.header["x_powered_by"])] | @tsv' | anew php2shell-subs-php.txt
+```
+
+#### 3. Filter only the vulnerable PHP versions 8.2<35 / 8.3<36 / 8.4<27 / 8.5<12 (php2shell / CVE-2026-109618 / CVE-2026-109619)
+```bash
+awk -F'PHP/' '{print $2" "$0}' php.txt | awk '{split($1,v,".");if(v[1]==8&&((v[2]==2&&v[3]+0<35)||(v[2]==3&&v[3]+0<36)||(v[2]==4&&v[3]+0<27)||(v[2]==5&&v[3]+0<12)))print "[VULN] "$0}' | anew php2shell-vuln.txt
+```
+
+#### 4. Scan with the community Nuclei templates for php2shell (php2shell / CVE-2026-109618 / CVE-2026-109619)
+```bash
+git clone https://github.com/Ademking/php2shell-nuclei-templates /tmp/p && nuclei -l live.txt -t /tmp/p/ -tags php,version -rl 50 -c 25 | anew php2shell-nuclei.txt
+```
+
+#### 5. ASN/CIDR mass sweep fingerprinting vulnerable PHP 8.x over common web ports (php2shell / CVE-2026-109618 / CVE-2026-109619)
+```bash
+cat ranges.txt | mapcidr -silent | naabu -silent -p 80,443,8080,8443 | httpx -silent -include-response-header -json | jq -r 'select((.header["x_powered_by"]//"")|test("PHP/8\\.(2|3|4|5)";"i")) | [.url,.header["x_powered_by"]] | @tsv' | anew php2shell-mass.txt
+```
+
+---
+
 ## 🔍 Search Engines for Hackers
 
 | Engine | Link | Description |
